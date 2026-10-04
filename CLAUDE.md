@@ -1,41 +1,58 @@
-# katrusik-site — katrusik.pro на Cloudflare Pages
+# katrusik-site — katrusik.pro на GitHub Pages
 
 Статическая копия сайта Кати Турусовой, снятая с WordPress на VPS
 81.200.145.190 (Debian 11, 1 ГБ RAM, MySQL регулярно падал от OOM).
-Проект Pages — `katrusik`, стабильный адрес `https://katrusik.pages.dev`.
+С 4 октября 2026 статика живёт на GitHub Pages (аккаунт `turusova96`),
+а Cloudflare Pages (проект `katrusik`) держит только функцию формы.
 
 ## Раскладка
 
 ```
-site/              то, что заливается (статика)
+site/              → репо turusova96/katrusik-site, домен katrusik.pro
   index.html       главная; она же /home/ (копия) — WP редиректил / на /home
-  links/           страница «Links»
-  thanks/          «спасибо» после отправки формы
-  404.html         обязателен: без него Pages отдаёт главную с кодом 200
-                   на любой несуществующий путь
-  s/*.pdf          4 гайда, перенесены с files.katrusik.pro
-  _redirects       короткие ссылки на гайды + заглушки старых адресов WP
-functions/         ВНЕ site/ — wrangler ищет их в корне проекта.
-  api/submit.js    форма «побщаться со мной»
+  links/ thanks/   страницы «Links» и «спасибо» после формы
+  404.html         страница ошибки
+  s/*.pdf          4 гайда
+  s/<код>/, index.php/s/<код>/, wp-admin/
+                   HTML-заглушки с meta refresh: GitHub Pages не понимает
+                   _redirects, поэтому короткие ссылки сделаны каталогами
+files-site/        → репо turusova96/katrusik-files, домен files.katrusik.pro
+                   (один домен на репо). PDF + те же заглушки, корень → katrusik.pro.
+                   Отдельного git тут нет: при правке скопировать во временный
+                   каталог, git init, force-push в main.
+functions/         функция /api/submit — деплоится на Cloudflare Pages
+cf-stub/           статика для Cloudflare Pages: только редирект на katrusik.pro,
+                   чтобы на katrusik.pages.dev не висела копия сайта
 ```
-
-Положить `functions/` внутрь `site/` не работает: файлы уедут как статика,
-а `/api/submit` ответит 405. Признак удачной сборки в выводе деплоя —
-строки `Compiled Worker successfully` и `Uploading Functions bundle`.
 
 ## Деплой
 
+Сайт: `git push` в `main` репо `turusova96/katrusik-site` — workflow
+`.github/workflows/pages.yml` выкладывает `site/`. Custom domain задан в
+настройках Pages (файл CNAME при сборке через Actions не используется).
+Токен GitHub — `GITHUB_API_TOKEN` в `.env`:
+
 ```bash
-cd ~/apps/katrusik-site
+set -a; . ./.env; set +a
+git push "https://x-access-token:$GITHUB_API_TOKEN@github.com/turusova96/katrusik-site.git" main
+```
+
+Функция формы (Cloudflare Pages) — деплоить `cf-stub`, **не** `site`:
+
+```bash
 set -a; . ./.env; set +a; export CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
-./node_modules/.bin/wrangler pages deploy site \
+./node_modules/.bin/wrangler pages deploy cf-stub \
   --project-name katrusik --branch main --commit-dirty=true
 ```
 
-`wrangler` закреплён на 3.x: четвёртому нужен Node 22, а в Debian 13 — 20.
+`functions/` должна лежать в корне проекта (wrangler ищет её там); признак
+удачной сборки — `Uploading Functions bundle`. `wrangler` закреплён на 3.x:
+четвёртому нужен Node 22, а в Debian 13 — 20.
 
 ## Форма
 
+Форма в `site/index.html` и `site/home/index.html` постит на
+`https://katrusik.pages.dev/api/submit`, функция возвращает на `https://katrusik.pro`.
 Заменила `send_to_telegram.php`: то же поле `client_info`, тот же префикс
 сообщения `form1 on site:`, тот же чат. Токен, chat_id и секрет Turnstile
 живут в секретах Pages (`wrangler pages secret list --project-name katrusik`),
@@ -57,12 +74,15 @@ Turnstile (виджет «katrusik.pro — форма обратной связ�
 
 ## Домены
 
-`katrusik.pro` и `files.katrusik.pro` привязаны к проекту (3 октября 2026).
-В DNS это CNAME на `katrusik.pages.dev`, проксированные; прежние A-записи на
-81.200.145.190 заменены, копия всех записей до переключения — в
-`dns-before-2026-10-03.json`.
+С 4 октября 2026 DNS (зона на Cloudflare) указывает на GitHub, без прокси —
+иначе GitHub не выпустит сертификат:
+`katrusik.pro` — A на 185.199.108–111.153, `files` — CNAME на
+`turusova96.github.io`. HTTPS enforced. От проекта Cloudflare Pages
+домены отвязаны. Если сертификат не выпускается — снять и снова задать
+cname через API `PUT /repos/.../pages`, это перезапускает выпуск.
 
-Откат: вернуть этим двум именам тип A и адрес 81.200.145.190.
+С 3 по 4 октября оба имени были CNAME на `katrusik.pages.dev`; до 3 октября —
+A на 81.200.145.190, копия записей — в `dns-before-2026-10-03.json`.
 
 `list.katrusik.pro`, `meet.katrusik.pro` и `0095rd.katrusik.pro` удалены
 3 октября 2026. У `meet` вхоста на VPS не было вовсе (отдавалась заглушка
@@ -102,6 +122,6 @@ wget сохраняет query-строку прямо в имя файла (`fro
 
 ```bash
 chromium --headless --disable-gpu --no-sandbox --virtual-time-budget=9000 \
-  --dump-dom https://katrusik.pages.dev/ | grep -o 'owl-loaded\|owl-item' | sort | uniq -c
+  --dump-dom https://katrusik.pro/ | grep -o 'owl-loaded\|owl-item' | sort | uniq -c
 ```
 Должно быть `owl-loaded` и 20 `owl-item` — столько же, сколько на оригинале.
