@@ -20,7 +20,8 @@ files-site/        → репо turusova96/katrusik-files, домен files.katr
                    (один домен на репо). PDF + те же заглушки, корень → katrusik.pro.
                    Отдельного git тут нет: при правке скопировать во временный
                    каталог, git init, force-push в main.
-functions/         функция /api/submit — деплоится на Cloudflare Pages
+functions/         функция /api/submit — деплоится на Cloudflare Pages; форма шлёт на
+                   form.katrusik.pro (custom domain проекта): *.pages.dev блокируется в РФ
 cf-stub/           статика для Cloudflare Pages: только редирект на katrusik.pro,
                    чтобы на katrusik.pages.dev не висела копия сайта
 ```
